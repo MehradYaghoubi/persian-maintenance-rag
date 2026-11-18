@@ -1,0 +1,16 @@
+id|model|revision|status|expected|question
+d01|CN-120|1.0|answered|CN-120/1.0/E17|معنی کد E17 چیست؟
+d02|||answered|CN-240/2.0/E17|در CN-240 نسخه 2.0 خطای E17 یعنی چه؟
+d03|CN-120||clarify|revision|E31 نشان‌دهنده چیست؟
+d04|||clarify|model|خطای E۰۴ چیست؟
+d05|CN-120|2.0|abstain||معنی E09 را بگو
+d06|CN-240|1.0|answered|CN-240/1.0/log|دفتر هشدارها کجاست؟
+d07|CN-120|2.0|answered|CN-120/2.0/revision|ورژن فریمور را کجا پیدا کنم؟
+d08|CN-240|2.0|answered|CN-240/2.0/power|برق ورودی از کجا دیده می‌شود؟
+d09|CN-120|1.0|answered|CN-120/1.0/log|سوابق را کجا ببینم؟
+d10|CN-120||answered|CN-120/1.0/E22,CN-120/2.0/E22|E22
+d11|CN-240|1.0|abstain||شرایط ضمانت قطعه چیست؟
+d12|||abstain||شماره خدمات مرکزی چند است؟
+d13|CN-240|2.0|answered|CN-240/2.0/E15|e١٥ یعنی چی؟
+d14|CN-240||answered|CN-240/1.0/revision,CN-240/2.0/revision|نسخه نرم‌افزار را کجا ببینم؟
+d15|||clarify|model,revision|توضیح E۱۷

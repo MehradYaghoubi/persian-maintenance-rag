@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>راهنمای نگهداری تسمه‌نقاله</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f4ed; color: #172822; font: 1rem/1.85 system-ui, sans-serif; }
+    main { max-width: 760px; margin: 0 auto; padding: clamp(25px, 6vw, 65px) 18px; }
+    header { border-bottom: 1px solid #c5cfc4; padding-bottom: 20px; margin-bottom: 22px; }
+    h1 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.3rem); line-height: 1.5; }
+    h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    p { margin: 5px 0; }
+    .muted { color: #4c6257; }
+    form, #result { background: #fff; border: 1px solid #c5cfc4; padding: clamp(15px, 4vw, 26px); border-radius: 12px; }
+    .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+    label { display: block; font-weight: bold; }
+    textarea, select, button { font: inherit; }
+    textarea, select { display: block; width: 100%; border: 1px solid #879d90; border-radius: 7px; color: inherit; background: #fff; padding: 9px 10px; }
+    textarea { min-height: 100px; resize: vertical; }
+    button { cursor: pointer; border-radius: 7px; }
+    button[type="submit"] { background: #124a39; color: #fff; border: 1px solid transparent; padding: 7px 18px; }
+    button:disabled { cursor: wait; opacity: .65; }
+    :focus-visible { outline: 3px solid #285cc4; outline-offset: 3px; }
+    .examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+    .examples button { color: #223e33; background: #eaf0e7; border: 1px solid #b3c5b7; padding: 4px 9px; font-size: .9rem; }
+    #result { border-inline-start: 4px solid #124a39; }
+    #result[data-status="abstain"], #result[data-status="clarify"] { border-inline-start-color: #a0631c; }
+    ul { margin: 10px 0 0; padding-inline-start: 22px; }
+    a { color: #145840; }
+    footer { margin-top: 18px; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>راهنمای نگهداری تسمه‌نقاله</h1>
+    <p class="muted">معنی کد خطا یا محل نمایش یک وضعیت را در راهنمای کنترلر جست‌وجو کنید. مدل‌ها و راهنماهای این دمو فرضی‌اند.</p>
+  </header>
+  <form id="question-form">
+    <label for="question">پرسش</label>
+    <textarea id="question" maxlength="500" required placeholder="کد E17 یعنی چه؟"></textarea>
+    <div class="filters">
+      <label for="model">مدل کنترلر
+        <select id="model"><option value="">مشخص نیست</option><option>CN-120</option><option>CN-240</option></select>
+      </label>
+      <label for="revision">نسخه راهنما
+        <select id="revision"><option value="">مشخص نیست</option><option>1.0</option><option>2.0</option></select>
+      </label>
+    </div>
+    <button type="submit" id="submit">جست‌وجو در راهنما</button>
+  </form>
+  <div class="examples" aria-label="نمونه پرسش‌ها">
+    <button type="button" data-model="CN-120" data-revision="2.0">E17 در <bdi>CN-120 2.0</bdi></button>
+    <button type="button" data-model="CN-240" data-revision="2.0">E17 در <bdi>CN-240 2.0</bdi></button>
+    <button type="button" data-model="">E17 با مدل نامشخص</button>
+  </div>
+  <section id="result" aria-live="polite" aria-atomic="true" hidden>
+    <h2 id="status"></h2>
+    <p id="answer"></p>
+    <ul id="citations" aria-label="ارجاع‌ها"></ul>
+  </section>
+  <footer><a href="/docs">مستندات API</a></footer>
+</main>
+<script>
+  const form = document.querySelector('#question-form');
+  const question = document.querySelector('#question');
+  const model = document.querySelector('#model');
+  const revision = document.querySelector('#revision');
+  const submit = document.querySelector('#submit');
+  const result = document.querySelector('#result');
+  const status = document.querySelector('#status');
+  const answer = document.querySelector('#answer');
+  const citations = document.querySelector('#citations');
+  const examples = document.querySelectorAll('.examples button');
+  const labels = { answered: 'پاسخ راهنما', clarify: 'اطلاعات تکمیلی', abstain: 'نیاز به بررسی انسانی' };
+
+  for (const example of examples) {
+    example.addEventListener('click', () => {
+      question.value = 'کد E17 یعنی چه؟';
+      model.value = example.dataset.model;
+      revision.value = example.dataset.revision || '';
+      form.requestSubmit();
+    });
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const payload = { question: question.value.trim(), model: model.value || null, revision: revision.value || null };
+    result.hidden = false;
+    result.dataset.status = '';
+    status.textContent = 'در حال جست‌وجو';
+    answer.textContent = '';
+    citations.replaceChildren();
+    submit.disabled = true;
+    examples.forEach((example) => { example.disabled = true; });
+    try {
+      if (!payload.question) {
+        status.textContent = 'پرسش را وارد کنید';
+        question.focus();
+        return;
+      }
+      const response = await fetch('/ask', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error('Request failed');
+      const data = await response.json();
+      result.dataset.status = data.status;
+      status.textContent = labels[data.status];
+      answer.textContent = data.answer;
+      for (const source of data.citations) {
+        const item = document.createElement('li');
+        item.textContent = source.title + '، نسخه ' + source.revision + '، بخش «' + source.section + '»' +
+          (source.code ? ' (' + source.code + ')' : '');
+        citations.append(item);
+      }
+    } catch {
+      status.textContent = 'جست‌وجو انجام نشد';
+      answer.textContent = 'سرویس پاسخ نداد. دوباره تلاش کنید.';
+    } finally {
+      submit.disabled = false;
+      examples.forEach((example) => { example.disabled = false; });
+    }
+  });
+</script>
+</body>
+</html>
