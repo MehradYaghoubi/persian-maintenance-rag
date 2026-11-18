@@ -11,3 +11,5 @@ All successful queries return HTTP 200 with `status`, `answer`, `citations`, `mi
 | `abstain` | Persian handoff explanation | `[]` | `[]` | `true` |
 
 Evidence objects contain `id`, `title`, `model`, `revision`, `section`, `code` (null for prose sections), and `excerpt`. Evidence IDs identify a single manual section or error-code row. `GET /health` returns `status` and `retrieval`. In dependency-backed mode, a failed check or query returns 503. `GET /` opens the Persian demo. `GET /docs` exposes the generated OpenAPI contract and an interactive request form.
+
+`GET /health` identifies `hybrid-rules`, `hybrid-e5`, `hybrid-ollama` or `hybrid-pgvector`. In `hybrid-e5` the local ONNX model loads at startup. All modes return the same grounded response shape. A recognized request for a procedure or numeric limit outside the fictional manuals is passed to human review even if it mentions a valid code.

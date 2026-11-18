@@ -10,6 +10,12 @@ CODE = re.compile(r"(?<![A-Z0-9])E[\s-]*(\d{1,5})(?![A-Z0-9])")
 MODEL = re.compile(r"\bCN[\s-]*(\d{2,4})\b", re.ASCII)
 REVISION = re.compile(r"(?:نسخه|ویرایش|ورژن|\bV|\bREV(?:ISION)?)\s*[:\-]?\s*(\d+\.\d+)", re.ASCII)
 NORMALIZE = str.maketrans("يك۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩‌٫", "یک01234567890123456789 .")
+UNDOCUMENTED_ACTION = re.compile(
+    r"\b(?:غیر\s*فعال|دور\s*زدن|دور\s*بزن\w*|حذف|پاک\s+کن\w*|"
+    r"سیم\s*کشی|تعویض|خرید|بخر\w*|ریست|راه\s*اندازی\s*مجدد|آدرس\s+IP)\b"
+    r"|\b(?:چند\s+(?:درجه|ولت|آمپر|درصد)|(?:چقدر|چه\s+درصد)\s+[^؟?]{0,24}مجاز|"
+    r"(?:تنظیم|ست)\s+(?:روی\s+)?\d+|روی\s+\d+\s+(?:تنظیم|ست))\b"
+)
 STOP = set(
     "چه چیست چیه کجا چی چرا چگونه چطور را در از تا برای با به و یا که این آن یک هم "
     "کند کنم کنید می شود شده هست است دارد دارم دارد بدهید ثبت گزارش پیدا نشان کد خطا "
@@ -33,6 +39,8 @@ ALIASES = {
     "نیروی کشش": "کشش",
     "داغی قاب": "دمای محفظه",
     "فوتوسل": "حسگر نوری",
+    "دو شاخه": "دوشاخه",
+    "شماره ورژن": "نسخه نرم افزار",
 }
 
 
@@ -43,6 +51,14 @@ def normalize(text: str) -> str:
 
 def tokens(text: str) -> set[str]:
     return {term for term in re.findall(r"[^\W\d_]+", text) if len(term) > 1} - STOP
+
+
+def normalized_terms(text: str) -> set[str]:
+    # shortcut: handle productive Persian plurals, add a morphological analyzer if the manuals grow.
+    return {
+        re.sub(r"(?:هایی|های|ها)$", "", word) if len(word) > 4 else word
+        for word in tokens(text)
+    }
 
 
 ALIASES = {normalize(alias): normalize(terms) for alias, terms in ALIASES.items()}
@@ -96,14 +112,22 @@ def abstain() -> dict:
 
 
 class Engine:
-    def __init__(self, semantic=None):
+    def __init__(self, semantic=None, *, dense=None):
         self.corpus = load_manuals()
         self.semantic = semantic
-        self.retrieval = semantic.retrieval if semantic else "hybrid-rules"
+        self.dense = dense
+        self.retrieval = semantic.retrieval if semantic else "hybrid-e5" if dense else "hybrid-rules"
+        if dense is not None:
+            dense.fit(self.corpus)
         self.terms = {row.id: tokens(normalize(row.search_text)) for row in self.corpus}
+        self.normalized = {row.id: normalized_terms(normalize(row.search_text)) for row in self.corpus}
+        self.headings = {row.id: normalized_terms(normalize(row.section)) for row in self.corpus}
 
     def ask(self, question: str, model=None, revision=None, *, mode="hybrid") -> tuple[dict, list[Evidence]]:
         query = normalize(question)
+        # The shipped manuals contain status and observation instructions only.
+        if UNDOCUMENTED_ACTION.search(query):
+            return abstain(), []
         models = {f"CN-{value}" for value in MODEL.findall(query)}
         revisions = set(REVISION.findall(query))
         conflicts = [
@@ -131,12 +155,13 @@ class Engine:
 
         literal = {row.id: len(self.terms[row.id] & words) / len(words) for row in candidates}
         scores = literal
+        concept_words = set()
         if mode == "hybrid" and self.semantic is None:
             expanded = ALIAS_PATTERN.sub(lambda match: ALIASES[match[0]], query)
-            concept_words = tokens(expanded)
+            concept_words = normalized_terms(expanded)
             if concept_words:
                 scores = {
-                    row.id: max(literal[row.id], len(self.terms[row.id] & concept_words) / len(concept_words))
+                    row.id: max(literal[row.id], len(self.normalized[row.id] & concept_words) / len(concept_words))
                     for row in candidates
                 }
         if mode == "hybrid" and self.semantic is not None:
@@ -147,6 +172,31 @@ class Engine:
 
         ranked = sorted((row for row in candidates if scores[row.id] > 0), key=lambda row: (-scores[row.id], row.id))
         shortlist = [row for row in ranked if scores[row.id] >= 0.55]
+        if not shortlist and concept_words and ranked:
+            top = ranked[0]
+            key = top.id.rsplit("/", 1)[1]
+            competing_score = next((scores[row.id] for row in ranked if row.id.rsplit("/", 1)[1] != key), 0.0)
+            if (
+                scores[top.id] >= 0.42
+                and scores[top.id] - competing_score >= 0.16
+                and len(self.normalized[top.id] & concept_words) >= 2
+                and self.headings[top.id] & concept_words
+            ):
+                shortlist = [top]
+        if mode == "hybrid" and self.dense is not None:
+            dense_scores = self.dense.scores(query, candidates)
+            dense_ranked = sorted(candidates, key=lambda row: (-dense_scores[row.id], row.id))
+            if not shortlist:
+                top = dense_ranked[0]
+                key = top.id.rsplit("/", 1)[1]
+                runner_up = next((dense_scores[row.id] for row in dense_ranked if row.id.rsplit("/", 1)[1] != key), 0.0)
+                if dense_scores[top.id] >= 0.82 and dense_scores[top.id] - runner_up >= 0.035:
+                    shortlist = [top]
+            # Interleave lexical and dense ranks so either signal can recover a citation.
+            rank_indices = [{row.id: index for index, row in enumerate(order)} for order in (ranked, dense_ranked)]
+            ranked = sorted(candidates, key=lambda row: (
+                -sum(1 / (10 + ranks[row.id]) for ranks in rank_indices if row.id in ranks), row.id,
+            ))
         if not shortlist:
             return abstain(), ranked
 

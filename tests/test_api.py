@@ -62,3 +62,19 @@ def test_unanswerable_and_validation():
         assert client.post("/ask", json=body).status_code == 422
     assert client.get("/health").json() == {"status": "ok", "retrieval": "hybrid-rules"}
     assert 'dir="rtl"' in client.get("/").text
+
+
+def test_documented_alarm_does_not_imply_undocumented_procedure():
+    client = TestClient(create_app())
+    for question in (
+        "چطور هشدار E31 را غیرفعال کنم؟",
+        "E17 را چطوری از حافظه پاک کنم؟",
+        "دمای مجاز محفظه چند درجه است؟",
+    ):
+        answer = client.post("/ask", json={"question": question, "model": "CN-240", "revision": "2.0"}).json()
+        assert answer["status"] == "abstain"
+        assert answer["human_review"]
+        assert not answer["citations"]
+    answer = client.post("/ask", json={"question": "موقع E31 چه دمایی را ثبت کنم؟", "model": "CN-240", "revision": "2.0"}).json()
+    assert answer["status"] == "answered"
+    assert answer["citations"][0]["id"] == "CN-240/2.0/E31"

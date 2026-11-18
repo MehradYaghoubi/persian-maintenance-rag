@@ -1,5 +1,6 @@
 import argparse
 import csv
+import hashlib
 import json
 import math
 import platform
@@ -73,6 +74,7 @@ def evaluate(engine, cases, mode):
         "answers_on_clarify_or_abstain": no_evidence_cases,
         "abstention_recall": round(correct_abstentions / expected_abstentions, 4) if expected_abstentions else None,
         "status_accuracy": round(correct_status / len(cases), 4),
+        "grounded_accuracy": round((len(cases) - len(failures)) / len(cases), 4),
         "p95_ms": round(sorted(timings)[math.ceil(len(timings) * 0.95) - 1], 4),
         "failures": failures,
     }
@@ -80,13 +82,17 @@ def evaluate(engine, cases, mode):
 
 def main():
     parser = argparse.ArgumentParser(description="Compare Persian retrieval modes on labeled manual questions.")
-    parser.add_argument("--split", choices=("dev", "test"), default="test")
+    parser.add_argument("--split", choices=("dev", "test", "hard-dev", "challenge"), default="test")
     parser.add_argument("--semantic", action="store_true", help="Add the configured Ollama hybrid engine.")
+    parser.add_argument("--e5-model-dir", help="Add local multilingual E5-small INT8 retrieval.")
     args = parser.parse_args()
     cases = load_cases(args.split)
     engine = Engine()
     result = {
         "split": args.split,
+        "split_sha256": hashlib.sha256(
+            (ROOT / "evaluation" / f"{args.split}.psv").read_text(encoding="utf-8").encode("utf-8")
+        ).hexdigest(),
         "runtime": f"Python {platform.python_version()}, {platform.system()} {platform.machine()}",
         "lexical": evaluate(engine, cases, "lexical"),
         "hybrid_rules": evaluate(engine, cases, "hybrid"),
@@ -97,6 +103,12 @@ def main():
         semantic_engine.semantic.check()
         semantic_engine.ask("نسخه نرم افزار کجاست؟", "CN-120", "1.0")
         result[semantic_engine.retrieval] = evaluate(semantic_engine, cases, "hybrid")
+    if args.e5_model_dir:
+        from e5 import E5Retriever
+
+        dense_engine = Engine(dense=E5Retriever(args.e5_model_dir))
+        dense_engine.ask("نسخه نرم افزار کجاست؟", "CN-120", "1.0")
+        result[dense_engine.retrieval] = evaluate(dense_engine, cases, "hybrid")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 

@@ -31,7 +31,10 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt -r requirements-semantic.txt
       - run: python -m pytest -q
       - run: python evaluate.py --split test > benchmark.json
+      - run: python evaluate.py --split challenge > challenge.json
       - uses: actions/upload-artifact@v4
         with:
           name: test-benchmark
-          path: benchmark.json
+          path: |
+            benchmark.json
+            challenge.json

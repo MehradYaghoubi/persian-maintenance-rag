@@ -39,7 +39,16 @@ class Answer(BaseModel):
 
 def create_app(engine=None) -> FastAPI:
     if engine is None:
-        engine = Engine(Semantic() if os.getenv("DATABASE_URL") or os.getenv("OLLAMA_URL") else None)
+        e5_dir = os.getenv("E5_MODEL_DIR")
+        use_ollama = os.getenv("DATABASE_URL") or os.getenv("OLLAMA_URL")
+        if e5_dir and use_ollama:
+            raise ValueError("Choose either E5_MODEL_DIR or the Ollama configuration")
+        if e5_dir:
+            from e5 import E5Retriever
+
+            engine = Engine(dense=E5Retriever(e5_dir))
+        else:
+            engine = Engine(Semantic() if use_ollama else None)
     api = FastAPI(title="Persian Maintenance RAG", version="1.0.0")
     unavailable = {503: {"description": "The retrieval service is temporarily unavailable"}}
 

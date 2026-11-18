@@ -119,12 +119,13 @@ def test_pgvector_seed_and_scope(ollama, monkeypatch):
 
 
 def test_benchmark_labels_reference_unique_queries_and_real_sources():
-    dev, test = load_cases("dev"), load_cases("test")
+    splits = [load_cases(split) for split in ("dev", "test", "hard-dev", "challenge")]
+    cases = [case for split in splits for case in split]
     ids = {row.id for row in Engine().corpus}
-    assert (len(dev), len(test)) == (15, 45)
-    assert len({case["id"] for case in dev + test}) == 60
-    assert len({case["question"] for case in dev + test}) == 60
-    for case in dev + test:
+    assert list(map(len, splits)) == [15, 45, 12, 40]
+    assert len({case["id"] for case in cases}) == len(cases)
+    assert len({case["question"] for case in cases}) == len(cases)
+    for case in cases:
         expected = set(filter(None, case["expected"].split(",")))
         if case["status"] == "answered":
             assert expected and expected <= ids
@@ -132,3 +133,24 @@ def test_benchmark_labels_reference_unique_queries_and_real_sources():
             assert expected and expected <= {"model", "revision"}
         else:
             assert case["status"] == "abstain" and not expected
+
+
+def test_dense_candidates_respect_scope_and_uncertainty():
+    class DenseFixture:
+        def fit(self, corpus):
+            assert len(corpus) == 32
+
+        def scores(self, question, candidates):
+            assert all(row.model == "CN-120" and row.revision == "1.0" for row in candidates)
+            scores = {row.id: 0.70 for row in candidates}
+            scores["CN-120/1.0/log"] = 0.91
+            if question == "پرسش مبهم":
+                scores["CN-120/1.0/revision"] = 0.90
+            return scores
+
+    engine = Engine(dense=DenseFixture())
+    answer, _ = engine.ask("پرسش محاوره ای", "CN-120", "1.0")
+    assert answer["status"] == "answered"
+    assert answer["citations"][0]["id"] == "CN-120/1.0/log"
+    assert answer["answer"] == answer["citations"][0]["excerpt"]
+    assert engine.ask("پرسش مبهم", "CN-120", "1.0")[0]["status"] == "abstain"

@@ -20,7 +20,25 @@ Open the [Persian demo](http://127.0.0.1:8000/) or the [interactive API docs](ht
 | E17 with no model or revision | Requests both fields. |
 | E999 | Marks the question for human review. |
 
-The quickstart uses lexical matching and a small Persian alias dictionary. It works with Python alone. The API documents machine-readable statuses and evidence. [API contract](docs/api.md)
+The quickstart uses lexical matching, Persian plural normalization, and a small alias dictionary. The API documents machine-readable statuses and evidence. [API contract](docs/api.md)
+
+## Run multilingual E5 retrieval on CPU
+
+The E5 mode adds a pretrained multilingual encoder and uses the same API and Persian demo. On the 40-question challenge, the initial release handled 27 cases correctly, the updated rules handled 31, and E5 hybrid retrieval handled 35. The E5 mode returned evidence excerpts and had 10.93 ms p95 in-process latency on the test CPU. [Evaluation report](docs/evaluation.md)
+
+With Python 3.14, install the optional dependencies and download the two pinned model files. Existing local copies under `models/` can be used directly.
+
+```sh
+python -m pip install -r requirements-e5.txt
+hf download Xenova/multilingual-e5-small tokenizer.json onnx/model_int8.onnx --revision 761b726dd34fb83930e26aab4e9ac3899aa1fa78 --local-dir models/multilingual-e5-small
+```
+
+| File | SHA-256 |
+| --- | --- |
+| `tokenizer.json` | `0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39` |
+| `onnx/model_int8.onnx` | `4d24e2bc01a447951524466ef533e52944bf48509e6552810bcee1a2711cb02c` |
+
+Set `E5_MODEL_DIR` to `models/multilingual-e5-small` and run Uvicorn as in the quickstart. In PowerShell, run `$env:E5_MODEL_DIR = 'models/multilingual-e5-small'`. In bash, run `export E5_MODEL_DIR=models/multilingual-e5-small`. Start the API with only one model configuration selected. The local model files are Git-ignored. [Model card](https://huggingface.co/intfloat/multilingual-e5-small) · [Pinned ONNX export](https://huggingface.co/Xenova/multilingual-e5-small/tree/761b726dd34fb83930e26aab4e9ac3899aa1fa78)
 
 ## Run the local model and pgvector
 
@@ -43,7 +61,7 @@ Set `OLLAMA_URL=http://127.0.0.1:11434` in the API process environment. For Powe
 
 1. Normalize Persian and Arabic digits, Arabic forms of ی and ک, diacritics, and half-spaces. Resolve model and revision from request fields or the question.
 2. Scope candidates by metadata. When the question names one code, match the exact error row. Compare its excerpt across admissible manuals and ask for the metadata that changes the result.
-3. For prose questions, combine token overlap with alias expansion in the quickstart or cosine similarity over multilingual embeddings in Ollama mode. Ollama can select a shortlisted evidence ID or return an abstention. The API validates the ID and reproduces the source excerpt verbatim.
+3. Flag recognized requests for undocumented procedures or numeric limits before interpreting a code. For prose, try lexical and normalized Persian term overlap. If that evidence is inconclusive, the E5 mode can fall back to the highest-scoring in-scope passage with a sufficient score and margin over other sections. The Ollama mode can select a shortlisted evidence ID or return an abstention. The API validates the ID and reproduces the source excerpt verbatim.
 
 The corpus is four authored Markdown manuals with 32 sections and error rows. The demo uses local fictional data. A human-review flag is returned in the response for a caller to handle.
 
@@ -52,10 +70,12 @@ The corpus is four authored Markdown manuals with 32 sections and error rows. Th
 ~~~sh
 python evaluate.py --split dev
 python evaluate.py --split test
+python evaluate.py --split hard-dev
+python evaluate.py --split challenge --e5-model-dir models/multilingual-e5-small
 docker compose exec api python evaluate.py --split test --semantic
 ~~~
 
-The benchmark compares lexical matching and the alias-based hybrid on 15 development queries and 45 test queries. Use `--semantic` in either model-backed configuration to add the embedding and model result on the same questions. [Metrics and failure examples](docs/evaluation.md) · [Labeled splits](evaluation/)
+The original benchmark contains 15 development queries and 45 test queries. The follow-up adds 12 harder development cases and a separate 40-question challenge with paraphrases, missing metadata, and unsupported requests that mention valid alarm codes. Use `--semantic` to add the Ollama result. [Metrics and failure examples](docs/evaluation.md) · [Labeled splits](evaluation/)
 
 ## Tests
 
