@@ -6,6 +6,10 @@ Persian question answering for two fictional conveyor controllers, each with two
 
 ## Run the demo
 
+![Persian Maintenance RAG answering an E17 question in Persian and citing the CN-120 revision 2.0 manual](docs/rag-demo.png)
+
+Live demo capture using multilingual E5 hybrid retrieval. The query is for E17 on CN-120, revision 2.0, and the answer cites the matching fictional maintenance manual.
+
 ~~~sh
 python -m pip install -r requirements.txt
 python -m uvicorn app:app --host 127.0.0.1 --port 8000
