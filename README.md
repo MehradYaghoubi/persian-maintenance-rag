@@ -4,6 +4,18 @@ Persian question answering for two fictional conveyor controllers, each with two
 
 سامانهٔ جست‌وجو در راهنمای فارسی دو کنترلر فرضی تسمه‌نقاله. برای نمونه، معنی `E17` را در هر دو مدل بپرسید و سپس همان پرسش را بدون مدل و نسخه بفرستید.
 
+## Results
+
+On the frozen 40-question challenge, **multilingual E5 hybrid retrieval handled 35 of 40 cases correctly (87.5%)**, up 20 percentage points from the initial release.
+
+| Configuration | Correct grounded outcomes | Correctly answered among 20 answerable questions |
+| --- | ---: | ---: |
+| Initial rules | 27/40 (67.5%) | 10/20 |
+| Updated rules | 31/40 (77.5%) | 11/20 |
+| Updated rules + multilingual E5 | **35/40 (87.5%)** | **15/20** |
+
+The E5 system also requested the correct missing fields in **7/7** clarification cases and abstained in **13/13** cases that required abstention. The five errors were abstentions on answerable questions. Warm in-process p95 latency was **10.93 ms** on an Intel Core i5-9400F. The challenge uses four fictional manuals authored for this project. [Evaluation rules, splits, and failures](docs/evaluation.md#frozen-40-question-challenge)
+
 ## Run the demo
 
 ![Persian Maintenance RAG answering an E17 question in Persian and citing the CN-120 revision 2.0 manual](docs/rag-demo.png)
@@ -28,7 +40,7 @@ The quickstart uses lexical matching, Persian plural normalization, and a small 
 
 ## Run multilingual E5 retrieval on CPU
 
-The E5 mode adds a pretrained multilingual encoder and uses the same API and Persian demo. On the 40-question challenge, the initial release handled 27 cases correctly, the updated rules handled 31, and E5 hybrid retrieval handled 35. The E5 mode returned evidence excerpts and had 10.93 ms p95 in-process latency on the test CPU. [Evaluation report](docs/evaluation.md)
+The E5 mode adds a pretrained multilingual encoder and returns supporting excerpts through the same API and Persian demo.
 
 With Python 3.14, install the optional dependencies and download the two pinned model files. Existing local copies under `models/` can be used directly.
 
